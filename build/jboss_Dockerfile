@@ -1,0 +1,35 @@
+FROM 		registry:5000/maven:3.6.0-jdk-8 AS build
+ARG         MAVEN_OPTS
+EXPOSE 		8080
+WORKDIR     /usr/src/app
+COPY 		doc/maven/settings.xml .
+COPY 		pom.xml .
+RUN         mvn -s ./settings.xml dependency:go-offline
+COPY 		src/main/java ./src/main/java
+COPY        src/main/webapp ./src/main/webapp
+RUN 		mvn -s ./settings.xml -DskipTests package
+
+
+FROM 		registry:5000/jboss-eap-7/eap71-openshift
+#WORKDIR     /deployments
+COPY        --from=build /usr/src/app/target/buildname*.war $JBOSS_HOME/standalone/deployments/buildname.war
+COPY		modules $JBOSS_HOME/modules/
+COPY		deployments/cicseci.rar $JBOSS_HOME/standalone/deployments/
+COPY		deployments/standalone-openshift.xml $JBOSS_HOME/standalone/configuration/
+#COPY 		keyring.p12 $JBOSS_HOME/standalone/configuration/
+# User root to modify war/modules owners
+USER 		root
+# Modify owners war
+#RUN 		chown jboss:jboss $JBOSS_HOME/standalone/configuration/keyring.p12
+RUN 		chown jboss:jboss $JBOSS_HOME/standalone/deployments/buildname.war
+RUN 		chown jboss:jboss $JBOSS_HOME/standalone/configuration/standalone-openshift.xml
+RUN 		chown -R jboss:jboss $JBOSS_HOME/modules/conf
+RUN 		chown -R jboss:jboss $JBOSS_HOME/modules/org
+RUN 		chown -R jboss:jboss $JBOSS_HOME/modules/com/mysql
+RUN         chown jboss:jboss $JBOSS_HOME/standalone/deployments/*
+
+ENV         JAVA_TOOL_OPTIONS=-Djboss.as.management.blocking.timeout=900
+EXPOSE 9990
+# use jboss user to run image
+USER 		jboss
+

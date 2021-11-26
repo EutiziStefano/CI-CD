@@ -1,0 +1,21 @@
+{{- if .Values.service.enabled | default false }}
+apiVersion: v1
+kind: Service
+
+metadata:
+  name: {{ include "push-notification-service.fullname" . }}
+  labels:
+    {{- include "push-notification-service.labels" . | nindent 4 }}
+
+spec:
+  type: {{ .Values.service.type }}
+  ports:
+    - port: {{ .Values.service.port }}
+      targetPort: {{ .Values.server.port }}
+      protocol: TCP
+      name: http
+  selector:
+    app: {{ .Chart.Name }}
+  sessionAffinity: None
+  type: {{ .Values.service.type }}
+{{- end }}

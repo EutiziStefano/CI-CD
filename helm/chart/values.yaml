@@ -1,0 +1,139 @@
+global:
+  # "/" e' mandatorio
+  repository: postesviluppo.azurecr.io/
+
+###############################
+# Deployment
+###############################
+# Number of pod replicas to deploy
+replicaCount: 1
+
+rollingUpdate:
+  maxSurge: 25%
+  maxUnavailable: 25%
+
+rollout_on_configmap_change: true
+
+imagePullSecrets:
+  - name: azurecr-credential
+
+serviceAccount:
+  # Specifies whether a service account should be created
+  create: true
+  # Annotations to add to the service account
+  annotations: {}
+  # The name of the service account to use.
+  # If not set and create is true, a name is generated using the fullname template
+  name:
+
+podSecurityContext: {}
+  # fsGroup: 2000
+
+securityContext: {}
+  # capabilities:
+  #   drop:
+  #   - ALL
+  # readOnlyRootFilesystem: true
+  # runAsNonRoot: true
+  # runAsUser: 1000
+
+hostAliases:
+- ip: "127.0.0.1"
+  hostnames:
+  - "foo.local"
+  - "bar.local"
+- ip: "10.1.2.3"
+  hostnames:
+  - "foo.remote"
+  - "bar.remote"
+
+env:
+  - name: TZ
+    value: Europe/Rome
+  - name: HTTP_PROXY
+  - name: HTTPS_PROXY
+  - name: http_proxy
+  - name: https_proxy
+  - name: JAVA_OTHER_OPTIONS
+    value: >-
+      -Djavax.net.ssl.trustStore=/etc/pki/ca-trust/extracted/java/cacerts-INT
+      -Djavax.net.ssl.trustStorePassword=changeit
+
+imagePullPolicy: Always
+ 
+server:
+  port: 8080
+
+observability:
+  port: 8080
+  path: /metrics
+  datadog:
+    enabled: true
+  prometheus:
+    enabled: true
+  
+livenessProbe:
+  enabled: true
+  initialDelaySeconds: 10
+  periodSeconds: 10
+  successThreshold: 1
+  failureThreshold: 3
+  timeoutSeconds: 10
+  httpGet:
+    path: /live
+    port: 8080
+    scheme: HTTP     
+
+readinessProbe:
+  enabled: true
+  initialDelaySeconds: 10
+  periodSeconds: 10
+  successThreshold: 1
+  failureThreshold: 3
+  timeoutSeconds: 10
+  httpGet:
+    path: /ready
+    port: 8080
+    scheme: HTTP
+      
+resources: {}
+    
+dnsPolicy: ClusterFirst
+restartPolicy: Always
+schedulerName: default-scheduler
+
+cacertsFile: cacerts-INT.jks
+
+volumeMounts:
+  config: /usr/app/bin/config/
+  secrets: /usr/app/bin/secrets/
+  # Vedi env javax.net.ssl.trustStore
+  cacerts: /etc/pki/ca-trust/extracted/java/
+
+###############################
+# Service
+###############################
+service:
+  enabled: true
+  type: ClusterIP
+  port: 80
+  
+###############################
+# Route
+###############################
+route:
+  enabled: true
+  # nel file route.yaml viene concatenato al nome dell'applicazione
+  host: .app.example.com
+  targetPort: http
+  tlsTermination: edge
+
+###############################
+# HPA
+###############################
+autoscaling:
+  enabled: false
+  minReplicas: 1
+  maxReplicas: 100
+  targetCPUUtilizationPercentage: 80
+  # targetMemoryUtilizationPercentage: 80

@@ -1,0 +1,136 @@
+apiVersion: apps/v1
+kind: Deployment
+
+metadata:
+  name: {{ include "push-notification-service.fullname" . }}
+  labels:
+    {{- include "push-notification-service.labels" . | nindent 4 }}
+
+spec:
+  replicas: {{ .Values.replicaCount }}
+  revisionHistoryLimit: 10
+  selector:
+    matchLabels:
+      app: {{ .Chart.Name }}
+      name: {{ include "push-notification-service.fullname" . }}
+
+  strategy:
+    rollingUpdate:
+      {{- toYaml .Values.rollingUpdate | nindent 6 }}
+    type: RollingUpdate
+
+  template:
+    metadata:
+      labels:
+        app: {{ .Chart.Name }}
+        name: {{ include "push-notification-service.fullname" . }}
+
+      annotations:
+
+        {{- if .Values.rollout_on_configmap_change | default false }}
+        checksum/config: {{ date "20060102150405" now | quote }}
+        {{- end }}
+
+        {{- if .Values.observability.datadog.enabled }}
+        ad.datadoghq.com/{{ .Chart.Name }}.check_names: '["openmetrics"]'
+        ad.datadoghq.com/{{ .Chart.Name }}.init_configs: '[{}]'
+        ad.datadoghq.com/{{ .Chart.Name }}.instances: |
+          [
+            {
+              "prometheus_url": "http://%%host%%:{{ .Values.observability.port }}{{ .Values.observability.path }}",
+              "namespace":"{{ $.Release.Namespace }}",
+              "metrics": ["*"]
+            }
+          ]
+        {{- end }}
+
+        {{- if .Values.observability.prometheus.enabled }}
+        prometheus.io/path: '{{ .Values.observability.path }}'
+        prometheus.io/port: '{{ .Values.observability.port }}'
+        prometheus.io/scrape: 'true'
+        {{- end }}
+
+    spec:
+
+      hostAliases:
+       {{- toYaml .Values.hostAliases | nindent 8 }}
+      
+      imagePullSecrets:
+        {{- toYaml .Values.imagePullSecrets | nindent 8 }}
+
+      serviceAccountName: {{ include "push-notification-service.serviceAccountName" . }}
+
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+
+      containers:
+        - name: {{ .Chart.Name }}
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          env:
+            {{- toYaml .Values.env | nindent 12 }}
+
+          image: "{{ .Values.global.repository }}{{ .Chart.Name }}:{{ .Chart.AppVersion }}"
+          
+          imagePullPolicy: {{ .Values.imagePullPolicy }}
+          
+          ports:
+            - name: http
+              containerPort: {{ .Values.server.port }}
+              protocol: TCP
+            - name: health
+              containerPort: {{ .Values.observability.port }}
+              protocol: TCP
+
+          {{- if .Values.livenessProbe.enabled }}
+          livenessProbe:
+            {{- omit .Values.livenessProbe "enabled" | toYaml | nindent 12 }}
+          {{- end }}
+          
+          {{- if .Values.readinessProbe.enabled }}            
+          readinessProbe:
+            {{- omit .Values.readinessProbe "enabled" | toYaml | nindent 12 }}
+          {{- end }}
+
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          
+          volumeMounts:
+            #ConfigMap di tipo File
+            - mountPath: {{ .Values.volumeMounts.config }}
+              name: {{ include "push-notification-service.fullname" . }}-config
+              readOnly: true
+
+            #Secret
+            - mountPath: {{ .Values.volumeMounts.secrets }}
+              name: {{ include "push-notification-service.fullname" . }}-secrets
+              readOnly: true
+
+            #cacerts keystore
+            - mountPath: {{ .Values.volumeMounts.cacerts }}
+              name: {{ include "push-notification-service.fullname" . }}-cacerts
+              readOnly: true
+                            
+      dnsPolicy: {{ .Values.dnsPolicy }}
+      restartPolicy: {{ .Values.restartPolicy }}
+      schedulerName: {{ .Values.schedulerName }}
+      
+      volumes:
+        #ConfigMap di tipo File
+        - name: {{ include "push-notification-service.fullname" . }}-config
+          configMap:
+            defaultMode: 420
+            name: {{ include "push-notification-service.fullname" . }}
+
+        #Secret di tipo File
+        - name: {{ include "push-notification-service.fullname" . }}-secrets
+          secret:
+            defaultMode: 420
+            secretName: {{ include "push-notification-service.fullname" . }}
+
+        #cacerts keystore
+        - name: {{ include "push-notification-service.fullname" . }}-cacerts
+          secret:
+            defaultMode: 420
+            secretName: {{ include "push-notification-service.fullname" . }}-cacerts
+          

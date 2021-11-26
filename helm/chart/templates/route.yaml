@@ -1,0 +1,25 @@
+{{- if .Values.route.enabled | default false }}
+apiVersion: route.openshift.io/v1
+kind: Route
+
+metadata:
+  name: {{ include "push-notification-service.fullname" . }}
+  labels:
+    {{- include "push-notification-service.labels" . | nindent 4 }}
+  
+  annotations:
+
+spec:
+  host: {{ .Chart.Name }}{{ .Values.route.host }}
+  port:
+    targetPort: {{ .Values.route.targetPort }}
+  tls:
+    termination: {{ .Values.route.tlsTermination }}
+  to:
+    kind: Service
+    name: {{ include "push-notification-service.fullname" . }}
+    weight: 100
+  wildcardPolicy: None
+
+{{ include "push-notification-service.helmRouteFix" $ }}
+{{- end }}
